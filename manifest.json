@@ -1,7 +1,7 @@
 {
   "id": "kimidian",
   "name": "Kimi Assistant",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.7.2",
   "description": "Embed Kimi Code CLI as an AI collaborator in your vault sidebar. Chat with Kimi over ACP to read, search and edit your notes.",
   "author": "Kimi",

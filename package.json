@@ -1,6 +1,6 @@
 {
   "name": "kimidian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Embed Kimi Code CLI as an AI collaborator in your vault sidebar (ACP over stdio).",
   "private": true,
   "main": "main.js",
