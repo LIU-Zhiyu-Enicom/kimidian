@@ -1,6 +1,41 @@
-# Kimidian
+# Kimi Assistant
 
-在 Obsidian 右侧边栏嵌入 Kimi Code CLI，让 Kimi 直接成为你的笔记仓库 AI 协作者。
+English | [中文](#功能)
+
+Embed [Kimi Code CLI](https://moonshotai.github.io/kimi-code/) directly into Obsidian's right sidebar, turning Kimi into an AI collaborator for your vault.
+
+**Protocol**: ACP (Agent Client Protocol, JSON-RPC over stdio). The plugin spawns `kimi.exe acp` as a child process and drives the session.
+
+## Features
+
+- **Sidebar Chat**: User / assistant bubbles, streaming Markdown rendering, collapsible thinking blocks, tool call blocks (tool name + status + target file).
+- **Permission Approval**: Inline "Allow Once / Always Allow / Deny" buttons before file edits or command execution; YOLO auto-approve mode available in settings (off by default).
+- **Session History**: Top "History" button lists past sessions for the current vault (via kimi acp `session/list`), click to restore and continue (`session/load`).
+- **Knowledge Base Integration**:
+  - Automatically attach the active note path when sending (can be disabled in settings).
+  - Type `@` to trigger note completion; selected note content is injected as `<file path="...">` (auto-truncated beyond 20K characters).
+  - Command "Send selected text to Kimi chat" + editor context menu.
+- **Status Bar**: Current model (dropdown switchable), connection status, YOLO toggle.
+- **Cancel Generation**: Click "Stop" during generation to trigger `session/cancel`.
+
+## Installation
+
+1. Install [Kimi Code CLI](https://moonshotai.github.io/kimi-code/) and run `kimi login` in your terminal.
+2. Build: `npm install && npm run build`.
+3. Copy the entire folder (including `main.js`, `manifest.json`, `styles.css`) to `<your-vault>/.obsidian/plugins/kimidian/`.
+4. Enable Kimi Assistant in Obsidian Settings → Community Plugins; confirm the CLI path in plugin settings.
+
+## Usage
+
+- Click the left ribbon icon, or run the command "Open Kimi Chat Sidebar".
+- Type a question and press Enter to send; `@` to reference notes; click "Stop" during generation to interrupt.
+- "New Chat" starts a fresh session; "History" restores past sessions.
+
+---
+
+# 功能
+
+在 Obsidian 右侧边栏嵌入 [Kimi Code CLI](https://moonshotai.github.io/kimi-code/)，让 Kimi 直接成为你的笔记仓库 AI 协作者。
 
 通信协议：ACP（Agent Client Protocol，JSON-RPC over stdio），插件作为 ACP client spawn `kimi.exe acp` 子进程并驱动会话。
 
@@ -21,7 +56,7 @@
 1. 安装 [Kimi Code CLI](https://moonshotai.github.io/kimi-code/)，并在终端运行 `kimi login` 完成登录。
 2. 构建：`npm install && npm run build`。
 3. 把整个文件夹（含 `main.js`、`manifest.json`、`styles.css`）复制到 `<你的vault>/.obsidian/plugins/kimidian/`。
-4. 在 Obsidian 设置 → 第三方插件中启用 Kimidian；在插件设置里确认 CLI 路径。
+4. 在 Obsidian 设置 → 第三方插件中启用 Kimi Assistant；在插件设置里确认 CLI 路径。
 
 ## 使用
 
@@ -29,7 +64,7 @@
 - 输入问题回车发送；`@` 引用笔记；生成中点「停止」中断。
 - 「新对话」开启全新会话；「历史」恢复过往会话。
 
-## 冒烟测试
+## Smoke Test
 
 ```bash
 node scripts/smoke-acp.mjs            # 仅 initialize 握手
