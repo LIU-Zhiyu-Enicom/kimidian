@@ -30,8 +30,7 @@ export async function writeClipboardText(text: string): Promise<void> {
   if (!doc) throw new Error("当前环境无剪贴板能力");
   const ta = doc.createElement("textarea");
   ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
+  ta.classList.add("kimidian-clipboard-ta");
   doc.body.appendChild(ta);
   ta.select();
   try {

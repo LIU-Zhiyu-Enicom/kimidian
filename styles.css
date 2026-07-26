@@ -575,8 +575,9 @@
   padding: 0 5px;
   line-height: 14px;
   min-width: 14px;
-  text-align: center;
+  text-align: center; display: none;
 }
+.kimidian-shield-badge.is-visible { display: inline-block; }
 
 .kimidian-shield-btn.has-pending {
   animation: kimidian-shield-pulse 1.2s ease-in-out infinite;

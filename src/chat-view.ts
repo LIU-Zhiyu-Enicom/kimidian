@@ -217,7 +217,7 @@ export class KimidianView extends ItemView {
     // 品牌头部：月亮 logo + Kimidian（对标 Claudian 左上角）
     const brand = root.createDiv({ cls: "kimidian-brand" });
     const logo = brand.createSpan({ cls: "kimidian-brand-logo" });
-    logo.innerHTML = MOON_SVG; // 内联 SVG（currentColor 适配明暗主题）
+    setIcon(logo, MOON_ICON_ID); // 已注册图标，currentColor 适配明暗主题
     brand.createSpan({ cls: "kimidian-brand-name", text: BRAND_NAME });
 
     // 顶部工具栏
@@ -1126,12 +1126,8 @@ export class KimidianView extends ItemView {
     this.shieldLabel.setText(PERMISSION_MODE_LABELS[mode]);
     this.shieldBtn.classList.toggle("is-active", mode !== "ask");
     this.shieldBtn.classList.toggle("has-pending", this.pendingPermissions > 0);
-    if (this.pendingPermissions > 0) {
-      this.shieldBadge.setText(String(this.pendingPermissions));
-      this.shieldBadge.style.display = "";
-    } else {
-      this.shieldBadge.style.display = "none";
-    }
+    this.shieldBadge.classList.toggle("is-visible", this.pendingPermissions > 0);
+    if (this.pendingPermissions > 0) { this.shieldBadge.setText(String(this.pendingPermissions)); }
   }
 
   /** 弹出权限模式菜单 */

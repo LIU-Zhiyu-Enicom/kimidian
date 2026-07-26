@@ -78,7 +78,7 @@ export class KimidianSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Kimidian 设置" });
+new Setting(containerEl).setName(Kimi).setHeading();
 
     new Setting(containerEl)
       .setName("Kimi CLI 路径")
