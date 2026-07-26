@@ -1,0 +1,745 @@
+/* Kimidian 侧边栏聊天样式 */
+
+.kimidian-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---- 顶部工具栏 ---- */
+/* 品牌头部：月亮 logo + Kimidian（对标 Claudian 左上角），与标题栏间距调紧凑 */
+.kimidian-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 2px;
+  font-size: var(--font-ui-medium);
+  font-weight: 600;
+  color: var(--text-normal);
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.kimidian-brand-logo {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  color: var(--text-normal); /* SVG fill=currentColor 随主题切换 */
+}
+
+.kimidian-brand-logo svg {
+  width: 22px;
+  height: 22px;
+}
+
+.kimidian-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 2px 8px 6px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex: 0 0 auto;
+}
+
+.kimidian-tool-btn {
+  font-size: var(--font-ui-smaller);
+  padding: 3px 10px;
+}
+
+.kimidian-reconnect {
+  margin-left: auto;
+}
+
+/* ---- 消息区 ---- */
+.kimidian-messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kimidian-welcome {
+  text-align: center;
+  color: var(--text-muted);
+  margin-top: 30px;
+}
+
+.kimidian-welcome-title {
+  font-size: var(--font-ui-medium);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.kimidian-welcome-sub {
+  font-size: var(--font-ui-smaller);
+  line-height: 1.5;
+  padding: 0 12px;
+}
+
+.kimidian-msg {
+  max-width: 92%;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: var(--font-ui-small);
+  line-height: 1.55;
+  word-break: break-word;
+  position: relative; /* 复制按钮定位 */
+  user-select: text; /* 消息文本可拖选复制 */
+}
+
+/* hover 浮现的复制按钮（气泡右上角） */
+.kimidian-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.kimidian-msg:hover .kimidian-copy-btn {
+  opacity: 1;
+}
+
+.kimidian-copy-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-secondary);
+}
+
+.kimidian-copy-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 拖选文字后浮现的「复制」小按钮（定位由 JS 按选区计算） */
+.kimidian-sel-copy {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 20;
+  user-select: none;
+}
+
+.kimidian-sel-copy:hover {
+  background: var(--background-secondary);
+}
+
+.kimidian-sel-copy svg {
+  width: 13px;
+  height: 13px;
+}
+
+.kimidian-msg-user {
+  align-self: flex-end;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  white-space: pre-wrap;
+}
+
+.kimidian-msg-assistant {
+  align-self: flex-start;
+  background: var(--background-secondary);
+}
+
+.kimidian-msg-assistant .kimidian-msg-body p:first-child {
+  margin-top: 0;
+}
+
+.kimidian-msg-assistant .kimidian-msg-body p:last-child {
+  margin-bottom: 0;
+}
+
+.kimidian-system {
+  align-self: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-align: center;
+  white-space: pre-wrap;
+}
+
+.kimidian-error {
+  align-self: stretch;
+  border: 1px solid var(--background-modifier-error);
+  background: var(--background-modifier-error-hover);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: var(--font-ui-small);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kimidian-error-title {
+  font-weight: 600;
+}
+
+.kimidian-error-code {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.kimidian-error-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.kimidian-error-details pre {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 4px 0 0;
+}
+
+.kimidian-error-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.kimidian-bash-hint {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+/* ---- 思考块 ---- */
+.kimidian-thought {
+  align-self: stretch;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  border-left: 2px solid var(--background-modifier-border);
+  padding-left: 8px;
+}
+
+.kimidian-thought summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.kimidian-thought-body {
+  white-space: pre-wrap;
+  margin-top: 4px;
+}
+
+/* ---- 工具调用块 ---- */
+.kimidian-tool {
+  align-self: stretch;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  font-size: var(--font-ui-smaller);
+  background: var(--background-primary-alt);
+}
+
+.kimidian-tool-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.kimidian-tool-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.kimidian-tool-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.kimidian-tool-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kimidian-tool-status {
+  font-size: var(--font-ui-smaller);
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--background-modifier-border);
+}
+
+.kimidian-tool-status[data-status="completed"] {
+  background: var(--background-modifier-success);
+}
+
+.kimidian-tool-status[data-status="failed"] {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.kimidian-tool-body {
+  padding: 4px 8px 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.kimidian-tool-path {
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+}
+
+.kimidian-tool-output,
+.kimidian-tool-diff {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+/* ---- 权限请求 ---- */
+.kimidian-permission {
+  align-self: stretch;
+  border: 1px solid var(--color-yellow);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: var(--font-ui-small);
+}
+
+.kimidian-permission-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.kimidian-permission-path {
+  font-size: 11px;
+  white-space: pre-wrap;
+  margin: 4px 0;
+}
+
+.kimidian-permission-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.kimidian-permission-btns button {
+  font-size: var(--font-ui-smaller);
+  padding: 3px 10px;
+}
+
+/* ---- 「↓ 新消息」悬浮按钮 ---- */
+.kimidian-new-msg-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 150px;
+  z-index: 15;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 14px;
+  padding: 3px 12px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.kimidian-new-msg-btn:hover {
+  background: var(--background-secondary);
+}
+
+/* ---- 历史面板 ---- */.kimidian-history {
+  position: absolute;
+  inset: 40px 0 0 0;
+  background: var(--background-primary);
+  z-index: 10;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kimidian-history-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.kimidian-history-item:hover {
+  background: var(--background-secondary);
+}
+
+.kimidian-history-title {
+  font-size: var(--font-ui-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kimidian-history-time {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.kimidian-history-loading,
+.kimidian-history-empty {
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 20px;
+  font-size: var(--font-ui-small);
+}
+
+/* ---- 附件 chips ---- */
+.kimidian-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px;
+  flex: 0 0 auto;
+}
+
+.kimidian-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--background-secondary);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: var(--font-ui-smaller);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kimidian-chip-x {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.kimidian-chip-x:hover {
+  color: var(--text-normal);
+}
+
+/* ---- 输入区 ---- */
+.kimidian-input-wrap {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  flex: 0 0 auto;
+  align-items: flex-end;
+}
+
+/* 拖拽落入的高亮反馈 */
+.kimidian-input-wrap.is-dragover {
+  outline: 2px dashed var(--text-accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* 粘贴/拖拽的附件卡片（图片带缩略图） */
+.kimidian-attach-card {
+  gap: 6px;
+}
+
+.kimidian-attach-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.kimidian-attach-icon {
+  font-size: 14px;
+}
+
+.kimidian-attach-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 用户消息里的上下文引用小标签（<file>/<active-note>/[附件] 的显示层折叠） */
+.kimidian-ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.kimidian-ref-chip {
+  padding: 1px 8px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kimidian-input {
+  flex: 1;
+  resize: none;
+  min-height: 60px;
+  max-height: 160px;
+  font-size: var(--font-ui-small);
+}
+
+.kimidian-send {
+  flex: 0 0 auto;
+}
+
+.kimidian-send.is-stop {
+  background-color: var(--background-modifier-error);
+}
+
+/* ---- 权限模式盾牌按钮（输入区左下） ---- */
+.kimidian-input-footer {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 6px;
+  flex: 0 0 auto;
+}
+
+.kimidian-shield-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  position: relative;
+  user-select: none;
+}
+
+.kimidian-shield-btn:hover {
+  background: var(--background-secondary);
+}
+
+.kimidian-shield-btn.is-active {
+  color: var(--color-orange);
+  border-color: var(--color-orange);
+  font-weight: 600;
+}
+
+.kimidian-shield-icon {
+  display: inline-flex;
+}
+
+.kimidian-shield-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.kimidian-shield-caret {
+  font-size: 10px;
+}
+
+.kimidian-shield-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: var(--color-red);
+  color: var(--text-on-accent);
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 0 5px;
+  line-height: 14px;
+  min-width: 14px;
+  text-align: center;
+}
+
+.kimidian-shield-btn.has-pending {
+  animation: kimidian-shield-pulse 1.2s ease-in-out infinite;
+  color: var(--color-orange);
+  border-color: var(--color-orange);
+}
+
+@keyframes kimidian-shield-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 140, 0, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(255, 140, 0, 0);
+  }
+}
+
+/* ---- @ 补全 ---- */
+.kimidian-suggest {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 110px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.kimidian-suggest-item {
+  padding: 6px 10px;
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kimidian-suggest-item.is-active {
+  background: var(--background-secondary);
+}
+
+/* ---- 底部状态栏 ---- */
+.kimidian-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: center;
+  padding: 4px 10px;
+  border-top: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+/* 窄侧栏里四个元素共存：允许收缩/换行，谁也不挤出谁 */
+.kimidian-statusbar > * {
+  min-width: 0;
+}
+
+.kimidian-statusbar select {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 会话创建失败后的可点击重试态 */
+.kimidian-status-retry {
+  color: var(--text-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 6px;
+}
+
+.kimidian-status-retry:hover {
+  color: var(--text-accent-hover);
+}
+
+.kimidian-status-conn[data-state="connected"] {
+  color: var(--text-success);
+}
+
+/* 上下文用量指示 */
+.kimidian-status-usage {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kimidian-status-usage.is-warn {
+  color: var(--color-yellow);
+  font-weight: 600;
+}
+
+.kimidian-status-usage.is-danger {
+  color: var(--text-error);
+  font-weight: 600;
+}
+
+.kimidian-status-conn[data-state="auth_required"],
+.kimidian-status-conn[data-state="error"] {
+  color: var(--text-error);
+}
+
+.kimidian-model-select {
+  font-size: var(--font-ui-smaller);
+  height: auto;
+  padding: 1px 4px;
+}
+
+/* 让历史面板相对根容器定位 */
+.workspace-leaf-content[data-type="kimidian-view"] .view-content {
+  position: relative;
+}
+
+/* 消息气泡右下角时间戳（小字号浅灰；估算时间更淡） */
+.kimidian-msg-ts {
+  display: block;
+  text-align: right;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-faint);
+  margin-top: 2px;
+  user-select: none;
+}
+
+.kimidian-msg-ts-est {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+/* 等待模型响应指示（低调小字 + 呼吸点，区别于思考块） */
+.kimidian-wait {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.kimidian-wait-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  animation: kimidian-wait-pulse 1.2s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes kimidian-wait-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/* 输入区右下角的重置会话小按钮 */
+.kimidian-reset-btn {
+  margin-left: auto;
+  font-size: var(--font-ui-smaller);
+  height: auto;
+  padding: 1px 8px;
+}

@@ -1,0 +1,19 @@
+{
+  "name": "kimidian",
+  "version": "0.1.0",
+  "description": "Embed Kimi Code CLI as an AI collaborator in your vault sidebar (ACP over stdio).",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "smoke": "node scripts/smoke-acp.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.8.10",
+    "typescript": "^5.5.0"
+  }
+}
