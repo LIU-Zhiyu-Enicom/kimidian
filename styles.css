@@ -380,13 +380,37 @@
 }
 
 .kimidian-history-item {
+  position: relative;
   padding: 8px 10px;
+  padding-right: 30px;
   border-radius: 8px;
   cursor: pointer;
 }
 
 .kimidian-history-item:hover {
   background: var(--background-secondary);
+}
+
+.kimidian-history-del {
+  display: none;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.kimidian-history-item:hover .kimidian-history-del {
+  display: block;
+}
+
+.kimidian-history-del:hover {
+  color: var(--text-error);
+  background: var(--background-modifier-hover);
 }
 
 .kimidian-history-title {
@@ -443,6 +467,7 @@
 
 /* ---- 输入区 ---- */
 .kimidian-input-wrap {
+  position: relative; /* @ 补全框锚定容器 */
   display: flex;
   gap: 6px;
   padding: 8px;
@@ -595,12 +620,13 @@
   }
 }
 
-/* ---- @ 补全 ---- */
+/* ---- @ 补全（DOM 挂在 .kimidian-input-wrap 内，bottom:100% 锚定在输入框正上方，不遮挡打字） ---- */
 .kimidian-suggest {
   position: absolute;
   left: 8px;
   right: 8px;
-  bottom: 110px;
+  bottom: 100%;
+  margin-bottom: 4px;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
