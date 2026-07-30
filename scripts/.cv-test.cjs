@@ -193,6 +193,10 @@ var require_mock_obsidian = __commonJS({
       getIcon() {
         return "mock";
       }
+      registerEvent() {
+      }
+      register() {
+      }
       async onOpen() {
       }
       async onClose() {
@@ -1496,6 +1500,8 @@ var KimidianView = class extends import_obsidian.ItemView {
     this.toolEntries = /* @__PURE__ */ new Map();
     /** @ 附件 */
     this.attachments = [];
+    /** 被 × 排除自动附带的活动笔记路径（切到别的笔记自动恢复；同一路径保持排除） */
+    this.activeNoteExcludedPath = null;
     /** 待发送附件（粘贴/拖拽的图片与文档；发送成功才清空，失败保留） */
     this.pending = [];
     /** 待处理的权限请求（取消时需要回 cancelled） */
@@ -1577,6 +1583,10 @@ var KimidianView = class extends import_obsidian.ItemView {
     if (this.msgLog.length > 0) this.restoreMsgLog();
     else this.renderWelcome();
     this.chipsEl = root.createDiv({ cls: "kimidian-chips" });
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => this.renderChips())
+    );
+    this.renderChips();
     const inputWrap = root.createDiv({ cls: "kimidian-input-wrap" });
     this.inputWrapEl = inputWrap;
     this.inputEl = inputWrap.createEl("textarea", {
@@ -1936,7 +1946,7 @@ ${e.message}
     const parts = [];
     if (this.plugin.settings.attachActiveNote) {
       const f = this.app.workspace.getActiveFile();
-      if (f && f.extension === "md") {
+      if (f && f.extension === "md" && this.activeNoteExcludedPath !== f.path && !this.attachments.some((a) => a.path === f.path)) {
         parts.push(`<active-note path="${f.path}" />`);
       }
     }
@@ -2701,6 +2711,19 @@ ${(c.newText ?? "").slice(0, 3e3)}`
   }
   renderChips() {
     this.chipsEl.empty();
+    const af = this.app.workspace.getActiveFile();
+    if (this.plugin.settings.attachActiveNote && af && af.extension === "md" && this.activeNoteExcludedPath !== af.path && !this.attachments.some((a) => a.path === af.path)) {
+      const activeChip = this.chipsEl.createSpan({
+        cls: "kimidian-chip kimidian-chip-active"
+      });
+      activeChip.createSpan({ text: `\u{1F4C4} ${af.path}` });
+      activeChip.title = "\u5F53\u524D\u6253\u5F00\u7684\u7B14\u8BB0\uFF08\u81EA\u52A8\u9644\u5E26\uFF0C\u5207\u6362\u7B14\u8BB0\u81EA\u52A8\u8DDF\u968F\uFF09";
+      const ax = activeChip.createSpan({ cls: "kimidian-chip-x", text: "\xD7" });
+      ax.onclick = () => {
+        this.activeNoteExcludedPath = af.path;
+        this.renderChips();
+      };
+    }
     for (const a of this.attachments) {
       const chip = this.chipsEl.createSpan({ cls: "kimidian-chip" });
       chip.createSpan({ text: a.folder ? `\u{1F4C1} ${a.path}` : a.path });

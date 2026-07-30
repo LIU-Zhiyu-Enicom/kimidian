@@ -126,7 +126,7 @@ function makeClient() {
 function makePlugin(client, settings = {}) {
   const app = {
     vault: { adapter: new obs.FileSystemAdapter("C:/vault") },
-    workspace: {},
+    workspace: { getActiveFile: () => null, on: () => ({}) },
   };
   const plugin = {
     app,
@@ -1060,6 +1060,52 @@ const attachCards = (view) =>
   ok(client.loadCalls.length === 0, "点删除不触发会话加载");
   fs.rmSync(delRoot, { recursive: true, force: true });
   globalThis.__mockConfirm = null;
+
+  console.log("== 活动笔记自动引用 chip：跟随切换 / × 排除 / 上下文去重 ==");
+  const fCur1 = mkFile("11_Projects/财务BP.md");
+  const fCur2 = mkFile("md文件语法.md");
+  client = makeClient();
+  plugin = makePlugin(client, { attachActiveNote: true });
+  plugin.app.workspace.getActiveFile = () => fCur1;
+  view = new KimidianView({ app: plugin.app }, plugin);
+  await view.onOpen();
+  await sleep(30);
+  const activeChipOf = () =>
+    view.chipsEl.find((e) => e.classList.contains("kimidian-chip-active"));
+  ok(activeChipOf() && activeChipOf().textContent.includes("11_Projects/财务BP.md"),
+    "打开视图即显示当前笔记 chip");
+  // 切换笔记 → chip 跟随
+  plugin.app.workspace.getActiveFile = () => fCur2;
+  view.renderChips();
+  ok(activeChipOf() && activeChipOf().textContent.includes("md文件语法.md") &&
+     !activeChipOf().textContent.includes("财务BP"),
+    "切换笔记后 chip 自动跟随");
+  // 发送上下文带 <active-note>
+  let ctx2 = await view.buildContextBlocks();
+  ok(ctx2.includes('<active-note path="md文件语法.md" />'), "上下文注入 <active-note>");
+  // × 排除：chip 消失且上下文不再注入；切到别的笔记恢复
+  activeChipOf().find((e) => e.classList.contains("kimidian-chip-x")).onclick();
+  ok(!activeChipOf(), "× 后当前笔记 chip 消失");
+  ctx2 = await view.buildContextBlocks();
+  ok(!ctx2.includes("<active-note"), "× 后上下文不再注入 active-note");
+  plugin.app.workspace.getActiveFile = () => fCur1;
+  view.renderChips();
+  ok(activeChipOf() && activeChipOf().textContent.includes("财务BP"),
+    "切到别的笔记后 chip 恢复");
+  // 手动 @ 同一笔记 → 不重复显示/注入
+  plugin.app.workspace.getActiveFile = () => fCur1;
+  view.attachments = [{ path: "11_Projects/财务BP.md" }];
+  view.renderChips();
+  ok(!activeChipOf(), "已手动引用的笔记不再显示自动 chip");
+  plugin.app.vault.adapter.write("11_Projects/财务BP.md", "财务内容");
+  ctx2 = await view.buildContextBlocks();
+  ok(!ctx2.includes("<active-note") && ctx2.includes('<file path="C:/vault/11_Projects/财务BP.md">'),
+    "手动引用与 active-note 不重复注入");
+  view.attachments = [];
+  // 设置关闭 → 不显示 chip
+  plugin.settings.attachActiveNote = false;
+  view.renderChips();
+  ok(!activeChipOf(), "attachActiveNote 关闭时不显示 chip");
 
   console.log(failed === 0 ? "\n===== DOM 回归测试全部通过 =====" : `\n===== ${failed} 项失败 =====`);
   process.exit(failed === 0 ? 0 : 1);

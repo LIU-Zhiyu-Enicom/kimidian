@@ -165,6 +165,8 @@ export class KimidianView extends ItemView {
   private toolEntries = new Map<string, MsgEntry & { kind: "tool" }>();
   /** @ 附件 */
   private attachments: Attachment[] = [];
+  /** 被 × 排除自动附带的活动笔记路径（切到别的笔记自动恢复；同一路径保持排除） */
+  private activeNoteExcludedPath: string | null = null;
   /** 待发送附件（粘贴/拖拽的图片与文档；发送成功才清空，失败保留） */
   private pending: PendingAttachment[] = [];
   /** 输入区容器（拖拽落入目标 + 高亮反馈） */
@@ -253,6 +255,11 @@ export class KimidianView extends ItemView {
 
     // 附件 chips
     this.chipsEl = root.createDiv({ cls: "kimidian-chips" });
+    // 当前活动笔记自动作为引用 chip 跟随（Claudian 式）；切换笔记时刷新
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => this.renderChips())
+    );
+    this.renderChips();
 
     // 输入区
     const inputWrap = root.createDiv({ cls: "kimidian-input-wrap" });
@@ -670,7 +677,13 @@ export class KimidianView extends ItemView {
     const parts: string[] = [];
     if (this.plugin.settings.attachActiveNote) {
       const f = this.app.workspace.getActiveFile();
-      if (f && f.extension === "md") {
+      // 被 × 排除、或已被 @/拖拽显式引用（避免重复注入）时跳过
+      if (
+        f &&
+        f.extension === "md" &&
+        this.activeNoteExcludedPath !== f.path &&
+        !this.attachments.some((a) => a.path === f.path)
+      ) {
         parts.push(`<active-note path="${f.path}" />`);
       }
     }
@@ -1588,6 +1601,26 @@ export class KimidianView extends ItemView {
 
   private renderChips(): void {
     this.chipsEl.empty();
+    // 当前活动笔记自动引用（Claudian 式跟随）：× 只排除该路径，切到别的笔记恢复
+    const af = this.app.workspace.getActiveFile();
+    if (
+      this.plugin.settings.attachActiveNote &&
+      af &&
+      af.extension === "md" &&
+      this.activeNoteExcludedPath !== af.path &&
+      !this.attachments.some((a) => a.path === af.path)
+    ) {
+      const activeChip = this.chipsEl.createSpan({
+        cls: "kimidian-chip kimidian-chip-active",
+      });
+      activeChip.createSpan({ text: `📄 ${af.path}` });
+      activeChip.title = "当前打开的笔记（自动附带，切换笔记自动跟随）";
+      const ax = activeChip.createSpan({ cls: "kimidian-chip-x", text: "×" });
+      ax.onclick = () => {
+        this.activeNoteExcludedPath = af.path;
+        this.renderChips();
+      };
+    }
     for (const a of this.attachments) {
       const chip = this.chipsEl.createSpan({ cls: "kimidian-chip" });
       chip.createSpan({ text: a.folder ? `📁 ${a.path}` : a.path });

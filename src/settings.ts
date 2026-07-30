@@ -176,7 +176,7 @@ export class KimidianSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("附带当前活动笔记")
-      .setDesc("发送消息时自动附上当前打开笔记的路径，帮助 Kimi 理解上下文。")
+      .setDesc("发送消息时自动附上当前打开笔记的路径（输入框上方显示为可排除的引用 chip），帮助 Kimi 理解上下文。")
       .addToggle((t) =>
         t.setValue(this.plugin.settings.attachActiveNote).onChange(async (v) => {
           this.plugin.settings.attachActiveNote = v;

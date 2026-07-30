@@ -108,6 +108,8 @@ class FakeItemView {
   getViewType() { return "mock"; }
   getDisplayText() { return "mock"; }
   getIcon() { return "mock"; }
+  registerEvent() {}
+  register() {}
   async onOpen() {}
   async onClose() {}
 }

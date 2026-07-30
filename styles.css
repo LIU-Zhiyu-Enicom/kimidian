@@ -456,6 +456,13 @@
   white-space: nowrap;
 }
 
+/* 当前活动笔记自动引用 chip：弱化显示，区别于手动 @/拖入的引用 */
+.kimidian-chip.kimidian-chip-active {
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
 .kimidian-chip-x {
   cursor: pointer;
   color: var(--text-muted);
