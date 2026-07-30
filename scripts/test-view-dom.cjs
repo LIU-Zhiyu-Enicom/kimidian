@@ -920,6 +920,147 @@ const attachCards = (view) =>
   ok(!wfind(), "回放期间不显示等待指示");
   view.replaying = false;
 
+  console.log("== @ 补全排序：当前笔记第一 → 同文件夹优先 → 其余路径序 ==");
+  // fs / pathM 复用前文已声明的 require
+  // bundle 内联了另一份 mock 类，靠 __mockTFile/__mockTFolder 标记过 instanceof
+  const mkFile = (p) => {
+    const f = new obs.TFile();
+    f.path = p;
+    f.name = p.split("/").pop();
+    f.extension = "md";
+    f.parent = { path: p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "" };
+    return f;
+  };
+  const fActive = mkFile("proj/当前笔记.md");
+  const fSibling = mkFile("proj/同夹笔记.md");
+  const fOther = mkFile("aaa/其他.md");
+  client = makeClient();
+  plugin = makePlugin(client);
+  plugin.app.vault.getMarkdownFiles = () => [fOther, fSibling, fActive];
+  plugin.app.workspace.getActiveFile = () => fActive;
+  view = new KimidianView({ app: plugin.app }, plugin);
+  await view.onOpen();
+  await sleep(30);
+  view.inputEl.value = "@";
+  view.inputEl.selectionStart = 1;
+  view.updateSuggest();
+  let sg = view.contentEl.findAll((e) => e.classList.contains("kimidian-suggest-item"));
+  ok(sg.length === 3 &&
+     sg[0].textContent === "proj/当前笔记.md" &&
+     sg[1].textContent === "proj/同夹笔记.md" &&
+     sg[2].textContent === "aaa/其他.md",
+    `空查询排序：当前笔记 → 同文件夹 → 路径序（实际 ${sg.map((e) => e.textContent).join(", ")}）`);
+  view.inputEl.value = "问 @其他";
+  view.inputEl.selectionStart = 5;
+  view.updateSuggest();
+  sg = view.contentEl.findAll((e) => e.classList.contains("kimidian-suggest-item"));
+  ok(sg.length === 1 && sg[0].textContent === "aaa/其他.md",
+    `带查询仍按模糊匹配过滤（实际 ${sg.length} 条）`);
+  // 选中补全：只留 chip，输入框清掉 @query（不放 @[[路径]] token）
+  view.acceptSuggestion(fOther);
+  ok(view.inputEl.value === "问 " && !view.inputEl.value.includes("@"),
+    `选中补全后输入框无 token（实际 "${view.inputEl.value}"）`);
+  ok(view.attachments.length === 1 && view.attachments[0].path === "aaa/其他.md",
+    "选中补全后引用进入附件 chips");
+  const accChips = view.chipsEl.findAll((e) => e.classList.contains("kimidian-chip"));
+  ok(accChips.some((e) => e.textContent.includes("aaa/其他.md")), "chip 显示在输入框上方");
+  view.attachments = [];
+  view.renderChips();
+  view.closeSuggest();
+
+  console.log("== 拖拽引用：笔记 → @ 位置引用；文件夹 → 文件夹引用 ==");
+  const fNote = mkFile("13_Resources/配色数据.md");
+  plugin.app.vault.adapter.write("13_Resources/配色数据.md", "配色内容正文");
+  plugin.app.metadataCache = {
+    getFirstLinkpathDest: (link) => (link === "13_Resources/配色数据.md" ? fNote : null),
+  };
+  const fChild = mkFile("22_Anki/英语.md");
+  const fFolder = new obs.TFolder();
+  fFolder.path = "22_Anki";
+  fFolder.name = "22_Anki";
+  fFolder.children = [fChild];
+  plugin.app.vault.getAbstractFileByPath = (p) => (p === "22_Anki" ? fFolder : null);
+  await view.onDrop({ preventDefault() {},
+    dataTransfer: { getData: () => "[[13_Resources/配色数据.md]]", files: [] } });
+  ok(!view.inputEl.value.includes("@[[") ,
+    "拖入笔记 → 输入框不放 token（只留 chip）");
+  ok(view.attachments.length === 1 &&
+     view.attachments[0].path === "13_Resources/配色数据.md" && !view.attachments[0].folder,
+    "拖入笔记 → 普通附件引用");
+  await view.onDrop({ preventDefault() {},
+    dataTransfer: { getData: () => "22_Anki", files: [] } });
+  ok(view.attachments.length === 2 && view.attachments[1].folder === true,
+    "拖入文件夹 → folder 标记附件");
+  const refChipEls = view.chipsEl.findAll((e) => e.classList.contains("kimidian-chip"));
+  ok(refChipEls.some((e) => e.textContent.includes("📁 22_Anki")), "文件夹 chip 带 📁 标识");
+  // Obsidian 内部拖拽：数据在 app.dragManager.draggable，dataTransfer 无文本
+  const fDragNote = mkFile("00_Fleeting/蔚蓝自研.md");
+  const fDragFolder = new obs.TFolder();
+  fDragFolder.path = "00_Fleeting";
+  fDragFolder.name = "00_Fleeting";
+  fDragFolder.children = [fDragNote];
+  plugin.app.dragManager = { draggable: { type: "file", file: fDragNote } };
+  await view.onDrop({ preventDefault() {},
+    dataTransfer: { getData: () => "", files: [] } });
+  ok(view.attachments.some((a) => a.path === "00_Fleeting/蔚蓝自研.md" && !a.folder),
+    "dragManager 拖入笔记 → 附件引用（dataTransfer 无文本也能识别）");
+  plugin.app.dragManager = { draggable: { type: "folder", file: fDragFolder } };
+  await view.onDrop({ preventDefault() {},
+    dataTransfer: { getData: () => "", files: [] } });
+  ok(view.attachments.some((a) => a.path === "00_Fleeting" && a.folder === true),
+    "dragManager 拖入文件夹 → 文件夹引用");
+  plugin.app.dragManager = { draggable: null };
+  const ctxXml = await view.buildContextBlocks();
+  ok(ctxXml.includes('<folder path="C:/vault/22_Anki">') && ctxXml.includes("- 22_Anki/英语.md"),
+    "发送时文件夹注入 <folder> 块与笔记清单");
+  ok(ctxXml.includes('<file path="C:/vault/13_Resources/配色数据.md">'),
+    "笔记引用仍注入 <file> 内容块");
+  // 空文本 + 只有引用 chips：允许发送，引用内容走上下文
+  view.attachments = [{ path: "13_Resources/配色数据.md" }];
+  view.renderChips();
+  view.inputEl.value = "";
+  await view.sendMessage();
+  ok(client.promptCalls === 1 &&
+     (client.lastPromptBlocks?.[0]?.text ?? "").includes("<file path=\"C:/vault/13_Resources/配色数据.md\">"),
+    "空文本仅引用时可发送且上下文携带被引用文件");
+  view.attachments = [];
+  view.renderChips();
+
+  console.log("== 历史会话删除：确认 → 删 CLI 目录 + 元数据 + 面板条目 ==");
+  const delRoot = pathM.join(__dirname, ".tmp-del-test");
+  fs.rmSync(delRoot, { recursive: true, force: true });
+  const sessDir = pathM.join(delRoot, "kimi-home", "sessions", "wd1", "s-del");
+  fs.mkdirSync(pathM.join(sessDir, "agents", "main"), { recursive: true });
+  fs.writeFileSync(pathM.join(sessDir, "agents", "main", "wire.jsonl"), "{}\n");
+  client = makeClient();
+  plugin = makePlugin(client, {
+    cliPath: pathM.join(delRoot, "kimi-home", "bin", "kimi.exe"),
+    sessionMeta: { "s-del": { title: "要删的会话", updatedAt: 1 } },
+  });
+  client.sessionList = async () => [
+    { sessionId: "s-del", title: "要删的会话", updatedAt: "2026-07-01T00:00:00Z", cwd: "C:/vault" },
+  ];
+  view = new KimidianView({ app: plugin.app }, plugin);
+  await view.onOpen();
+  await sleep(30);
+  await view.toggleHistory();
+  let hItems = view.historyPanelEl.findAll((e) => e.classList.contains("kimidian-history-item"));
+  ok(hItems.length === 1, "历史面板列出 1 个会话");
+  const delBtn = hItems[0] && hItems[0].find((e) => e.classList.contains("kimidian-history-del"));
+  ok(!!delBtn, "会话条目有删除按钮");
+  globalThis.__mockConfirm = () => true;
+  delBtn.onclick({ stopPropagation() {} });
+  await sleep(20);
+  ok(!fs.existsSync(sessDir), "确认后 CLI 会话目录已删除");
+  ok(!plugin.settings.sessionMeta["s-del"], "本地 sessionMeta 已清除");
+  ok(plugin.saveCalls > 0, "删除后持久化设置");
+  hItems = view.historyPanelEl.findAll((e) => e.classList.contains("kimidian-history-item"));
+  ok(hItems.length === 0 && view.historyPanelEl.textContent.includes("暂无历史会话"),
+    "条目移除并显示空态");
+  ok(client.loadCalls.length === 0, "点删除不触发会话加载");
+  fs.rmSync(delRoot, { recursive: true, force: true });
+  globalThis.__mockConfirm = null;
+
   console.log(failed === 0 ? "\n===== DOM 回归测试全部通过 =====" : `\n===== ${failed} 项失败 =====`);
   process.exit(failed === 0 ? 0 : 1);
 })().catch((e) => {
