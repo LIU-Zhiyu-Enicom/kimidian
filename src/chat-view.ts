@@ -3,7 +3,8 @@
  *
  * 布局：顶部工具栏（新对话 / 历史 / 重连）→ 消息区 → 附件 chips → 输入区 → 底部状态栏。
  * 支持：流式 Markdown 渲染、工具调用折叠块、思考折叠块、权限内联按钮、
- * @ 笔记补全、历史会话列表与恢复（kimi acp 支持 session/list + session/load）。
+ * @ 笔记补全（当前笔记/同文件夹优先）、拖拽引用笔记与文件夹、
+ * 历史会话列表/恢复/删除（kimi acp 支持 session/list + session/load；删除走本地落盘目录）。
  */
 import {
   App,
@@ -13,6 +14,7 @@ import {
   Menu,
   Notice,
   TFile,
+  TFolder,
   WorkspaceLeaf,
   setIcon,
 } from "obsidian";
@@ -75,6 +77,8 @@ const MAX_ATTACH_CHARS = 20000;
 interface Attachment {
   /** vault 相对路径 */
   path: string;
+  /** true = 文件夹引用：注入路径 + 笔记清单，具体内容由 CLI 按需读取 */
+  folder?: boolean;
 }
 
 /** 流式渲染中的工具调用块 */
@@ -161,6 +165,8 @@ export class KimidianView extends ItemView {
   private toolEntries = new Map<string, MsgEntry & { kind: "tool" }>();
   /** @ 附件 */
   private attachments: Attachment[] = [];
+  /** 被 × 排除自动附带的活动笔记路径（切到别的笔记自动恢复；同一路径保持排除） */
+  private activeNoteExcludedPath: string | null = null;
   /** 待发送附件（粘贴/拖拽的图片与文档；发送成功才清空，失败保留） */
   private pending: PendingAttachment[] = [];
   /** 输入区容器（拖拽落入目标 + 高亮反馈） */
@@ -249,6 +255,11 @@ export class KimidianView extends ItemView {
 
     // 附件 chips
     this.chipsEl = root.createDiv({ cls: "kimidian-chips" });
+    // 当前活动笔记自动作为引用 chip 跟随（Claudian 式）；切换笔记时刷新
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => this.renderChips())
+    );
+    this.renderChips();
 
     // 输入区
     const inputWrap = root.createDiv({ cls: "kimidian-input-wrap" });
@@ -581,16 +592,19 @@ export class KimidianView extends ItemView {
   private async sendMessage(): Promise<void> {
     const raw = this.inputEl.value.trim();
     if (this.busy) return;
-    if (!raw && this.pending.length === 0) return;
+    // 空文本但有 @ 引用 chips / 待发送附件时同样允许发送（引用内容走上下文注入）
+    if (!raw && this.pending.length === 0 && this.attachments.length === 0) return;
     if (!(await this.ensureConnected())) return;
     if (!(await this.ensureSession())) return;
 
     const text = raw ? this.stripAttachmentTokens(raw) : "";
     this.lastUserText = text || raw || "附件";
     this.inputEl.value = "";
-    this.renderUserMsg(
-      raw || `（发送附件：${this.pending.map((p) => p.name).join("、")}）`
-    );
+    const attachNames = [
+      ...this.attachments.map((a) => a.path),
+      ...this.pending.map((p) => p.name),
+    ];
+    this.renderUserMsg(raw || `（发送附件：${attachNames.join("、")}）`);
     this.forceScrollToBottom(); // 用户自己发消息：恢复跟随并滚到底
 
     // 组装 prompt：用户文本 + 上下文 XML 块 + 文本文档附件 + 二进制路径引用 + 图片块
@@ -658,19 +672,32 @@ export class KimidianView extends ItemView {
     return text.replace(/@\[\[[^\]]+\]\]/g, "").trim();
   }
 
-  /** 构造上下文 XML：活动笔记 + @ 引用笔记 */
+  /** 构造上下文 XML：活动笔记 + @ 引用笔记/文件夹 */
   private async buildContextBlocks(): Promise<string> {
     const parts: string[] = [];
     if (this.plugin.settings.attachActiveNote) {
       const f = this.app.workspace.getActiveFile();
-      if (f && f.extension === "md") {
+      // 被 × 排除、或已被 @/拖拽显式引用（避免重复注入）时跳过
+      if (
+        f &&
+        f.extension === "md" &&
+        this.activeNoteExcludedPath !== f.path &&
+        !this.attachments.some((a) => a.path === f.path)
+      ) {
         parts.push(`<active-note path="${f.path}" />`);
       }
     }
     const base = this.vaultBasePath();
     for (const a of this.attachments) {
+      const abs = base ? `${base}/${a.path}` : a.path;
+      if (a.folder) {
+        // 文件夹：给路径 + 笔记清单，CLI 自身有 vault 文件读写能力，按需读取即可
+        parts.push(
+          `<folder path="${abs}">\n该文件夹下的 Markdown 笔记（按需读取）：\n${this.listFolderNotes(a.path)}\n</folder>`
+        );
+        continue;
+      }
       try {
-        const abs = base ? `${base}/${a.path}` : a.path;
         let content = await this.app.vault.adapter.read(a.path);
         let truncated = false;
         if (content.length > MAX_ATTACH_CHARS) {
@@ -685,6 +712,21 @@ export class KimidianView extends ItemView {
       }
     }
     return parts.join("\n");
+  }
+
+  /** 递归列出文件夹内的 Markdown 笔记（vault 相对路径，每行一条） */
+  private listFolderNotes(folderPath: string): string {
+    const root = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!(root instanceof TFolder)) return "（文件夹不存在）";
+    const out: string[] = [];
+    const walk = (folder: TFolder): void => {
+      for (const c of folder.children) {
+        if (c instanceof TFolder) walk(c);
+        else if (c instanceof TFile && c.extension === "md") out.push(c.path);
+      }
+    };
+    walk(root);
+    return out.length > 0 ? out.map((p) => `- ${p}`).join("\n") : "（空文件夹）";
   }
 
   private cancelTurn(): void {
@@ -1328,6 +1370,12 @@ export class KimidianView extends ItemView {
           cls: "kimidian-history-time",
           text: cwdShort ? `${time} · ${cwdShort}` : time,
         });
+        const del = item.createSpan({ cls: "kimidian-history-del", text: "×" });
+        del.title = "删除该会话记录";
+        del.onclick = (ev) => {
+          ev.stopPropagation();
+          void this.deleteHistorySession(s, item);
+        };
         item.onclick = () => void this.loadSession(s);
       }
     } catch (e) {
@@ -1337,6 +1385,46 @@ export class KimidianView extends ItemView {
       } else {
         panel.createDiv({ text: `加载失败：${(e as Error).message}` });
       }
+    }
+  }
+
+  /**
+   * 删除历史会话：移除 CLI 侧会话目录（sessions/<wd>/<sessionId>/）+ 本地元数据，
+   * 并从面板移除对应条目。ACP 协议无 session/delete，只能直接删落盘文件。
+   */
+  private async deleteHistorySession(s: SessionInfo, itemEl: HTMLElement): Promise<void> {
+    const title =
+      s.title ?? this.plugin.settings.sessionMeta?.[s.sessionId]?.title ?? "（无标题会话）";
+    if (!window.confirm(`删除会话「${title}」？\n该操作会删除 CLI 侧的会话记录，不可恢复。`)) {
+      return;
+    }
+    try {
+      const root = this.sessionsRoot();
+      for (const wd of await fsp.readdir(root)) {
+        const dir = path.join(root, wd, s.sessionId);
+        try {
+          if ((await fsp.stat(dir)).isDirectory()) {
+            await fsp.rm(dir, { recursive: true, force: true });
+          }
+        } catch {
+          /* 不在此目录，继续 */
+        }
+      }
+      const st = this.plugin.settings;
+      if (st.sessionMeta) delete st.sessionMeta[s.sessionId];
+      if (st.diagSessionId === s.sessionId) st.diagSessionId = null;
+      await this.plugin.saveSettings();
+      itemEl.remove();
+      new Notice("会话已删除。");
+      // 删空了就如实显示空态
+      if (this.historyPanelEl && !this.historyPanelEl.querySelector(".kimidian-history-item")) {
+        this.historyPanelEl.createDiv({
+          cls: "kimidian-history-empty",
+          text: "当前 vault 暂无历史会话。",
+        });
+      }
+    } catch (e) {
+      new Notice(`删除会话失败：${(e as Error).message}`);
     }
   }
 
@@ -1424,16 +1512,27 @@ export class KimidianView extends ItemView {
       this.closeSuggest();
       return;
     }
+    // 排序：当前打开的笔记 → 当前笔记所在文件夹 → 其余（各自按路径字典序）
+    const active = this.app.workspace.getActiveFile();
+    const activeDir = active?.parent?.path ?? "";
+    const rankOf = (f: TFile): number => {
+      if (active && f.path === active.path) return 0;
+      if (activeDir && f.parent?.path === activeDir) return 1;
+      return 2;
+    };
+    const query = tok.query.toLowerCase();
     const files = this.app.vault
       .getMarkdownFiles()
-      .filter((f) => this.fuzzyMatch(f.path.toLowerCase(), tok.query.toLowerCase()))
+      .filter((f) => this.fuzzyMatch(f.path.toLowerCase(), query))
+      .sort((a, b) => rankOf(a) - rankOf(b) || a.path.localeCompare(b.path))
       .slice(0, 12);
     if (files.length === 0) {
       this.closeSuggest();
       return;
     }
     this.closeSuggest();
-    const box = this.contentEl.createDiv({ cls: "kimidian-suggest" });
+    // 挂到输入区容器上：CSS 用 bottom:100% 锚定在输入框正上方，不遮挡打字
+    const box = this.inputWrapEl.createDiv({ cls: "kimidian-suggest" });
     this.suggestEl = box;
     files.forEach((f, i) => {
       const item = box.createDiv({
@@ -1483,17 +1582,14 @@ export class KimidianView extends ItemView {
   private acceptSuggestion(f: TFile): void {
     const tok = this.currentAtToken();
     if (!tok) return;
+    // 引用只体现为输入框上方的 chip：清掉输入框里的 @query 部分，
+    // 上下文由 attachments 在发送时注入（输入文本不放 @[[路径]] token）
     const pos = this.inputEl.selectionStart ?? 0;
-    const before = this.inputEl.value.slice(0, tok.start + 1);
+    const before = this.inputEl.value.slice(0, tok.start);
     const after = this.inputEl.value.slice(pos);
-    const token = `@[[${f.path}]] `;
-    this.inputEl.value = `${before}${token}${after}`;
-    const newPos = (before + token).length;
-    this.inputEl.selectionStart = this.inputEl.selectionEnd = newPos;
-    if (!this.attachments.some((a) => a.path === f.path)) {
-      this.attachments.push({ path: f.path });
-      this.renderChips();
-    }
+    this.inputEl.value = `${before}${after}`;
+    this.inputEl.selectionStart = this.inputEl.selectionEnd = before.length;
+    this.addNoteRef(f.path);
     this.closeSuggest();
     this.inputEl.focus();
   }
@@ -1505,9 +1601,29 @@ export class KimidianView extends ItemView {
 
   private renderChips(): void {
     this.chipsEl.empty();
+    // 当前活动笔记自动引用（Claudian 式跟随）：× 只排除该路径，切到别的笔记恢复
+    const af = this.app.workspace.getActiveFile();
+    if (
+      this.plugin.settings.attachActiveNote &&
+      af &&
+      af.extension === "md" &&
+      this.activeNoteExcludedPath !== af.path &&
+      !this.attachments.some((a) => a.path === af.path)
+    ) {
+      const activeChip = this.chipsEl.createSpan({
+        cls: "kimidian-chip kimidian-chip-active",
+      });
+      activeChip.createSpan({ text: `📄 ${af.path}` });
+      activeChip.title = "当前打开的笔记（自动附带，切换笔记自动跟随）";
+      const ax = activeChip.createSpan({ cls: "kimidian-chip-x", text: "×" });
+      ax.onclick = () => {
+        this.activeNoteExcludedPath = af.path;
+        this.renderChips();
+      };
+    }
     for (const a of this.attachments) {
       const chip = this.chipsEl.createSpan({ cls: "kimidian-chip" });
-      chip.createSpan({ text: a.path });
+      chip.createSpan({ text: a.folder ? `📁 ${a.path}` : a.path });
       const x = chip.createSpan({ cls: "kimidian-chip-x", text: "×" });
       x.onclick = () => {
         this.attachments = this.attachments.filter((t) => t !== a);
@@ -1568,18 +1684,100 @@ export class KimidianView extends ItemView {
     }
   }
 
-  /** 拖拽落下：外部文件走 File 对象；vault 内部拖拽（text 里的 [[路径]]）走 vault 路径 */
+  /**
+   * 拖拽落下：Obsidian 内部拖拽（文件列表/搜索等）的拖动数据不在 dataTransfer 文本里，
+   * 而在 app.dragManager.draggable（未公开 API，社区插件通用做法），优先走它；
+   * 再兼容 text 里的 [[链接]]/可解析路径；最后外部文件走 File 对象按扩展名分类处理。
+   */
   private async onDrop(e: DragEvent): Promise<void> {
     e.preventDefault();
     this.inputWrapEl.classList.remove("is-dragover");
     const dt = e.dataTransfer;
     if (!dt) return;
+    let handled = false;
+    for (const item of this.draggedVaultItems()) {
+      if (await this.handleVaultEntry(item)) handled = true;
+    }
+    if (handled) return;
+    const text = dt.getData("text") ?? "";
+    // [[链接]]（可多个，去别名）；没有链接时把整段文本当作 vault 路径试解析
+    const links = [...text.matchAll(/\[\[([^\]]+)\]\]/g)]
+      .map((m) => (m[1].split("|")[0] ?? "").trim())
+      .filter((s) => s.length > 0);
+    const candidates = links.length > 0 ? links : [text.trim()].filter((s) => s.length > 0);
+    for (const c of candidates) {
+      if (await this.addVaultRef(c)) handled = true;
+    }
+    if (handled) return;
     if (dt.files && dt.files.length > 0) {
       for (const f of Array.from(dt.files)) await this.addDroppedFile(f);
-      return;
     }
-    const m = (dt.getData("text") ?? "").match(/\[\[([^\]]+)\]\]/);
-    if (m) await this.addVaultFile(m[1]);
+  }
+
+  /** 读取 Obsidian 拖拽管理器中正在拖动的 vault 文件/文件夹 */
+  private draggedVaultItems(): Array<TFile | TFolder> {
+    const dm = (this.app as unknown as { dragManager?: { draggable?: unknown } })
+      .dragManager;
+    const d = dm?.draggable as
+      | { type?: string; file?: TFile | TFolder; files?: Array<TFile | TFolder> }
+      | null
+      | undefined;
+    if (!d) return [];
+    if (Array.isArray(d.files) && d.files.length > 0) return d.files;
+    if (d.file) return [d.file];
+    return [];
+  }
+
+  /**
+   * vault 内部拖拽解析：按文本解析为 vault 条目后统一交给 handleVaultEntry。
+   * 无法解析返回 false（交给外部文件分支）。
+   */
+  private async addVaultRef(candidate: string): Promise<boolean> {
+    const file =
+      this.app.metadataCache.getFirstLinkpathDest(candidate, "") ??
+      this.app.vault.getAbstractFileByPath(candidate);
+    if (file instanceof TFolder || file instanceof TFile) {
+      return this.handleVaultEntry(file);
+    }
+    return false;
+  }
+
+  /**
+   * vault 条目统一入口：笔记/文本 → @ 位置引用 chip（与 @ 补全同一机制）；
+   * 文件夹 → 文件夹引用 chip；图片读字节、二进制引用原路径（保持原行为）。
+   */
+  private async handleVaultEntry(file: TFile | TFolder): Promise<boolean> {
+    if (file instanceof TFolder) {
+      this.addNoteRef(file.path, true);
+      new Notice(`已引用文件夹：${file.path}`);
+      return true;
+    }
+    if (!(file instanceof TFile)) return false;
+    const kind = classifyFile(file.name);
+    try {
+      if (kind === "image") {
+        const buf = await this.app.vault.adapter.readBinary(file.path);
+        this.addImageBytes(file.name, imageMimeFor(file.name) ?? "image/png", new Uint8Array(buf));
+      } else if (kind === "text") {
+        this.addNoteRef(file.path);
+      } else {
+        this.pending.push({ kind: "binary", name: file.name, vaultPath: file.path });
+        this.renderChips();
+      }
+      return true;
+    } catch (e) {
+      new Notice(`读取拖入文件失败：${(e as Error).message}`);
+      return true;
+    }
+  }
+
+  /** 把笔记/文件夹加入引用 chips（上下文发送时注入；输入框不放 token），拖拽与补全共用 */
+  private addNoteRef(refPath: string, folder = false): void {
+    if (!this.attachments.some((a) => a.path === refPath)) {
+      this.attachments.push({ path: refPath, folder });
+      this.renderChips();
+    }
+    this.inputEl.focus();
   }
 
   /** 外部文件（操作系统拖入）：按扩展名分类处理 */
@@ -1603,26 +1801,6 @@ export class KimidianView extends ItemView {
       } catch (e) {
         new Notice(`存入附件失败：${(e as Error).message}`);
       }
-    }
-  }
-
-  /** vault 内部文件（文件列表拖入）：图片读字节，文本读内容，二进制直接引用原路径 */
-  private async addVaultFile(path: string): Promise<void> {
-    const name = path.split("/").pop() ?? path;
-    const kind = classifyFile(name);
-    try {
-      if (kind === "image") {
-        const buf = await this.app.vault.adapter.readBinary(path);
-        this.addImageBytes(name, imageMimeFor(name) ?? "image/png", new Uint8Array(buf));
-      } else if (kind === "text") {
-        this.pending.push({ kind: "text", name: path, content: await this.app.vault.adapter.read(path) });
-        this.renderChips();
-      } else {
-        this.pending.push({ kind: "binary", name, vaultPath: path });
-        this.renderChips();
-      }
-    } catch (e) {
-      new Notice(`读取拖入文件失败：${(e as Error).message}`);
     }
   }
 

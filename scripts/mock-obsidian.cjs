@@ -78,6 +78,12 @@ class FakeEl {
     return out;
   }
   find(pred) { return this.findAll(pred)[0] ?? null; }
+  // 标准 DOM 选择器：仅支持 ".class"（测试断言够用；querySelectorAll 返回数组即可，调用方会 Array.from）
+  querySelector(sel) { return this.querySelectorAll(sel)[0] ?? null; }
+  querySelectorAll(sel) {
+    const cls = String(sel).replace(/^\./, "");
+    return this.findAll((e) => e.classList.contains(cls));
+  }
   // select 语义
   get options() { return this.children.filter((c) => c.tagName === "OPTION"); }
   get selectedIndex() { return this.options.findIndex((o) => o.selected); }
@@ -102,6 +108,8 @@ class FakeItemView {
   getViewType() { return "mock"; }
   getDisplayText() { return "mock"; }
   getIcon() { return "mock"; }
+  registerEvent() {}
+  register() {}
   async onOpen() {}
   async onClose() {}
 }
@@ -167,6 +175,8 @@ const __collapsedSel = () => ({
 });
 globalThis.window.getSelection = () => globalThis.__mockSelection ?? __collapsedSel();
 globalThis.__collapsedSel = __collapsedSel;
+// window.confirm：删除确认对话框；测试用 globalThis.__mockConfirm 注入应答（默认确认）
+globalThis.window.confirm = (msg) => (globalThis.__mockConfirm ?? (() => true))(msg);
 
 // document：selectionchange 监听目标（与 FakeEl 相同的监听器模式）
 if (typeof globalThis.document === "undefined") {
@@ -178,7 +188,10 @@ if (typeof globalThis.document === "undefined") {
   };
 }
 
-function setIcon() {}
+function setIcon(el, id) {
+  // 真实 Obsidian 会把注册图标渲染成内联 SVG（fill/stroke 用 currentColor）
+  if (el) el.innerHTML = `<svg data-icon="${String(id)}" stroke="currentColor"></svg>`;
+}
 
 module.exports = {
   App: class FakeApp {},
@@ -187,7 +200,16 @@ module.exports = {
   MarkdownRenderer: FakeMarkdownRenderer,
   Menu: FakeMenu,
   Notice: FakeNotice,
-  TFile: class FakeTFile {},
+  // TFile/TFolder：bundle 内联的是另一份 mock 类，instanceof 会跨类失效，
+  // 用 __mockTFile/__mockTFolder 标记 + Symbol.hasInstance 让两份类互相承认
+  TFile: class FakeTFile {
+    constructor() { this.__mockTFile = true; }
+    static [Symbol.hasInstance](x) { return !!x && x.__mockTFile === true; }
+  },
+  TFolder: class FakeTFolder {
+    constructor() { this.__mockTFolder = true; }
+    static [Symbol.hasInstance](x) { return !!x && x.__mockTFolder === true; }
+  },
   WorkspaceLeaf: class FakeWorkspaceLeaf {},
   setIcon,
   // 测试工具出口
