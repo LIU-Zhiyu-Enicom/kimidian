@@ -9,3 +9,4 @@ build/
 *.tsbuildinfo
 .env
 .env.local
+data.json
